@@ -129,7 +129,7 @@ export const getBookReviews = async (req, res, next) => {
 
     res.status(200).json({
       status: true,
-      message: "get book successfully",
+      message: "get review successfully",
       data: reviews,
     });
   } catch (err) {

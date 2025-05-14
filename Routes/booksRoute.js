@@ -10,16 +10,20 @@ import {
 import { check } from "express-validator";
 import authCheck from "../middlewares/authCheck.js";
 import multerConfig from "../middlewares/multer/uploadImage.js";
+import createMultipleFileupload from "../middlewares/multer/createMultipleFileupload.js";
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 const router = express.Router();
 
 router.post("/getAll", getBooks);
-router.get("/topRatedBooks", getTopRatedBooks);
+router.post("/topRatedBooks", getTopRatedBooks);
 router.use(authCheck);
 
 router.post(
   "/addBooks",
-  multerConfig.single("image"), // Add Multer middleware
+  createMultipleFileupload('cover_image'),
   [
     check("genres").not().isEmpty(),
     check("price").not().isEmpty(),
@@ -34,7 +38,7 @@ router.post("/viewBook", [check("bookId").not().isEmpty()], getBooksById);
 
 router.patch(
   "/updateBook",
-  multerConfig.single("image"),
+  createMultipleFileupload('cover_image'),
   [check("bookId").not().isEmpty()],
   updateBooks
 );
