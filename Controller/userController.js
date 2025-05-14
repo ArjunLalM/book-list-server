@@ -83,8 +83,8 @@ export const signUp = async (req, res, next) => {
       data: newUser,
       access_token: token,
       access_token: token,
-      user_role: logUser.userRole,
-      userId:logUser.userId
+      user_role:newUser.userRole,
+      userId:newUser.userId
     });
   } catch (err) {
     console.error(err);

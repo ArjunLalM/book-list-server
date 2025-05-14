@@ -3,13 +3,11 @@ import Books from "../Models/books.js";
 import HttpError from "../middlewares/httpError.js";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-
-// Create Signup
 export const createBooks = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -18,13 +16,11 @@ export const createBooks = async (req, res, next) => {
       console.log("Validation Error:", errors);
       return next(
         new HttpError(
-          "Invalid data inputs passed, Please check your data before retry!",
+          "Invalid data inputs passed. Please check your data and try again!",
           422
         )
       );
     }
-
-    console.log(req.body, 'req.body')
 
     const {
       title,
@@ -35,8 +31,9 @@ export const createBooks = async (req, res, next) => {
       isDeleted = false,
     } = req.body;
 
-    const { userId, role } = req.userData;
+    console.log(req.body, "req.body");
 
+    const { userId, role } = req.userData;
     console.log(userId, "userId", role, "role");
 
     if (role !== "admin") {
@@ -45,19 +42,33 @@ export const createBooks = async (req, res, next) => {
       );
     }
 
-    console.log(req.file, "req.file");
+    // Handle multiple image uploads from multer
+    console.log(req.files, "******************************************");
+    // const uploadedImages = req.files ? req.files.map((file) => file.path) : [];
+    const files = req.files;
+    const uploadedImage = [];
 
-    // Handle file upload if using multer
-    const uploadedImage = req.file ? req.file.path : image;
+    files.forEach((file) => {
+      const filePath = `${file.path}`;
+      fs.rename(file.path, filePath, (err) => {
+        if (err) {
+          // Handle error appropriately and send an error response
+          return res.status(500).json({ error: "Failed to store the file" });
+        }
+      });
+      uploadedImage.push(filePath);
+    });
+    // const uploadedImage = []
+    console.log("Uploaded Images:", uploadedImage);
 
     const newBook = await Books.create({
       title,
       genres,
       author,
       price,
-      image: uploadedImage,
       description,
       isDeleted,
+      images: uploadedImage,
     });
 
     res.status(201).json({
@@ -66,10 +77,10 @@ export const createBooks = async (req, res, next) => {
       data: newBook,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error creating book:", err);
     return next(
       new HttpError(
-        "Oops! Process failed, please contact the admin. Product adding failed.",
+        "Oops! Process failed, please contact the admin. Book adding failed.",
         500
       )
     );
@@ -77,11 +88,52 @@ export const createBooks = async (req, res, next) => {
 };
 
 //Get Books
+// export const getBooks = async (req, res, next) => {
+//   try {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       console.log("Validation Error:", errors);
+//       return next(
+//         new HttpError(
+//           "Invalid data inputs passed. Please check your data before retrying!",
+//           422
+//         )
+//       );
+//     }
+
+//     const books = await Books.find({ isDeleted: false });
+
+//     if (!books.length) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "No Books found",
+//         data: [],
+//       });
+//     }
+
+//     console.log(books,"books from api")
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Books retrieved successfully",
+//       access_token: null,
+//       data: books,
+//       totalBooks: books.length,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     return next(
+//       new HttpError(
+//         "Oops! Failed to fetch products, please contact admin.",
+//         500
+//       )
+//     );
+//   }
+// };
 export const getBooks = async (req, res, next) => {
   try {
-
     const errors = validationResult(req);
-    if (!errors.isEmpty())  {
+    if (!errors.isEmpty()) {
       console.log("Validation Error:", errors);
       return next(
         new HttpError(
@@ -90,7 +142,22 @@ export const getBooks = async (req, res, next) => {
         )
       );
     }
-    const books = await Books.find({ isDeleted: false }); // Fetch all books from the database
+
+    // Extract pagination parameters
+    let page = parseInt(req.body.page) || 0;
+    let pageSize = parseInt(req.body.pageSize) || 8;
+    const skip = page * pageSize;
+
+    // Count total documents (not deleted)
+    const totalBooksCount = await Books.countDocuments({ isDeleted: false });
+
+    // Fetch paginated books
+    const books = await Books.aggregate([
+      { $match: { isDeleted: false } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: pageSize },
+    ]);
 
     if (!books.length) {
       return res.status(404).json({
@@ -99,13 +166,16 @@ export const getBooks = async (req, res, next) => {
         data: [],
       });
     }
+    console.log("Page:", req.body.page, "PageSize:", req.body.pageSize);
 
     res.status(200).json({
       status: true,
       message: "Books retrieved successfully",
       access_token: null,
       data: books,
-      totalBooks: books.length,
+      totalBooks: totalBooksCount,
+      currentPage: page,
+      pageSize: pageSize,
     });
   } catch (err) {
     console.error(err);
@@ -135,12 +205,10 @@ export const getBooksById = async (req, res, next) => {
     const { bookId } = req.body; // Extracting bookId from req.body
     console.log(req.body);
     if (!bookId) {
-      return res
-        .status(400)
-        .json({
-          status: false,
-          message: "Book ID is required in the request body",
-        });
+      return res.status(400).json({
+        status: false,
+        message: "Book ID is required in the request body",
+      });
     }
 
     const book = await Books.findById({ _id: bookId });
@@ -167,17 +235,11 @@ export const getBooksById = async (req, res, next) => {
     );
   }
 };
-
-
-
-
-
+//Update Books
 export const updateBooks = async (req, res, next) => {
   try {
     const errors = validationResult(req);
-
     if (!errors.isEmpty()) {
-      console.log("error", errors);
       return next(
         new HttpError(
           "Invalid data inputs passed, Please check your data before retry!",
@@ -196,31 +258,53 @@ export const updateBooks = async (req, res, next) => {
       });
     }
 
-    // Find the book to get the old image
     const existingBook = await Books.findById(bookId);
     if (!existingBook) {
       return res.status(404).json({ message: "No Book found with this ID" });
     }
-
-
-    let uploadedImage = existingBook.image; 
-    if (req.file) {
-      uploadedImage = req.file.path;
-      
-      // Delete old image if it exists
-      if (existingBook.image) {
-        const oldImagePath = path.join(__dirname, "../", existingBook.image);
-        console.log(oldImagePath, 'oldImagePath')
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath); // Delete old image
-        }
-      }
+    // Delete old image files from local storage
+    if (existingBook.images && existingBook.images.length > 0) {
+      existingBook.images.forEach((imagePath) => {
+        fs.unlink(imagePath, (err) => {
+          if (err) {
+            console.error(`Failed to delete file: ${imagePath}`, err);
+          } else {
+            console.log(`Deleted old file: ${imagePath}`);
+          }
+        });
+      });
     }
+    // let uploadedImages = existingBook.images || [];
 
-    // Update book with new details
+    // Handle multiple image uploads from multer
+    console.log(req.files, "******************************************");
+    // const uploadedImages = req.files ? req.files.map((file) => file.path) : [];
+    const files = req.files;
+    const uploadedImage = [];
+
+    files.forEach((file) => {
+      const filePath = `${file.path}`;
+      fs.rename(file.path, filePath, (err) => {
+        if (err) {
+          // Handle error appropriately and send an error response
+          return res.status(500).json({ error: "Failed to store the file" });
+        }
+      });
+      uploadedImage.push(filePath);
+    });
+    // const uploadedImage = []
+    console.log("Uploaded Images:", uploadedImage);
+
     const updatedBook = await Books.findByIdAndUpdate(
       bookId,
-      { title, description, price, author, genres, image: uploadedImage },
+      {
+        title,
+        description,
+        price,
+        author,
+        genres,
+        images: uploadedImage,
+      },
       { new: true, runValidators: true }
     );
 
@@ -231,11 +315,11 @@ export const updateBooks = async (req, res, next) => {
     });
   } catch (err) {
     console.error(err);
-    return next(new HttpError("Oops! Process failed, please contact admin", 500));
+    return next(
+      new HttpError("Oops! Process failed, please contact admin", 500)
+    );
   }
 };
-
-
 
 //softDeleteBook By ID
 export const DeleteBook = async (req, res, next) => {
@@ -282,7 +366,6 @@ export const DeleteBook = async (req, res, next) => {
   }
 };
 
-
 export const getTopRatedBooks = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -296,11 +379,10 @@ export const getTopRatedBooks = async (req, res, next) => {
       );
     }
 
-   
     const books = await Books.aggregate([
       { $match: { isDeleted: false } },
-      { $sort: { rating: -1 } }, 
-      { $limit: 3 } 
+      { $sort: { rating: -1 } },
+      { $limit: 3 },
     ]);
 
     if (!books.length) {
@@ -321,10 +403,7 @@ export const getTopRatedBooks = async (req, res, next) => {
   } catch (err) {
     console.error(err);
     return next(
-      new HttpError(
-        "Oops! Failed to fetch books, please contact admin.",
-        500
-      )
+      new HttpError("Oops! Failed to fetch books, please contact admin.", 500)
     );
   }
 };
